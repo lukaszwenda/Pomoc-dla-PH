@@ -2,7 +2,7 @@
 self.addEventListener("install", function (e) {
   e.waitUntil(
     caches.open("kalkulator-cache").then(function (cache) {
-      return cache.addAll(["index.html"]);
+      return cache.addAll(["./index.html"]);
     })
   );
 });
