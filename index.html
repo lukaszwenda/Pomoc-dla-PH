@@ -1,20 +1,164 @@
 
 <!DOCTYPE html>
+
 <html lang="pl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="manifest" href="./manifest.json">
-  <link rel="icon" href="./icons/icon-512.png">
-  <title>Kalkulator Inwestycji</title>
-</head>
+<meta charset="utf-8"/>
+<title>Kalkulator inwestycji dla PH oraz PSD</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<style>
+    body { padding: 40px; }
+    table input { width: 100%; }
+    .table td, .table th { vertical-align: middle; }
+  </style>
+<link href="manifest.json" rel="manifest"/><link href="logo_kp_512x512.png" rel="icon" type="image/png"/><script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js')
+    .then(() => console.log('Service Worker zarejestrowany'))
+    .catch(err => console.error('Błąd SW:', err));
+}
+</script></head>
 <body>
-  <h1>Kalkulator Inwestycji</h1>
-  <p>Aplikacja offline PWA z ikoną KP</p>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js');
+<div class="container">
+<div class="text-center mb-4"><img alt="" src="logo_kp_with_calc.png" style="max-height: 80px;"/></div><h1 class="text-center mb-4">Kalkulator inwestycji dla PH oraz PSD</h1>
+<div class="mb-3">
+<label class="form-label">Nazwa klienta:</label>
+<input class="form-control" id="clientName" type="text"/>
+</div>
+<table class="table table-bordered align-middle text-center" id="productTable">
+<thead class="table-light">
+<tr>
+<th>Nazwa produktu</th>
+<th>Ilość</th>
+<th>Cena netto</th>
+<th>VAT (%)</th>
+<th>Marża (%)</th>
+<th>Kwota</th>
+<th>Usuń</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><input class="form-control" type="text" value="Produkt 1"/></td>
+<td><input class="form-control" onchange="update()" type="number" value="100"/></td>
+<td><input class="form-control" onchange="update()" step="0.01" type="number" value="2.00"/></td>
+<td><input class="form-control" onchange="update()" type="number" value="23"/></td>
+<td><input class="form-control" onchange="update()" type="number" value="10"/></td>
+<td class="total">0.00</td>
+<td><button class="btn btn-danger btn-sm" onclick="removeRow(this)">Usuń</button></td>
+</tr>
+</tbody>
+</table>
+<button class="btn btn-primary mb-3" onclick="addProduct()">Dodaj produkt</button>
+<div class="mb-3">
+<label class="form-label">Kwota inwestycji (KP):</label>
+<div class="input-group">
+<input class="form-control" id="investmentAmount" onchange="update()" type="number" value="100"/>
+<span class="input-group-text">PLN</span>
+</div>
+</div>
+<p class="fw-bold" id="totalWithoutMargin"></p>
+<p class="fw-bold" id="totalWithMargin"></p>
+<p class="fw-bold" id="kpPercent"></p>
+<p class="fw-bold" id="netPriceDifference"></p>
+<p class="fw-bold text-success" id="clientProfit"></p>
+<button class="btn btn-success mt-3 me-2" onclick="saveAsPDF()">Zapisz jako PDF</button>
+<button class="btn btn-secondary mt-3" onclick="window.print()">Drukuj / Zapisz jako PDF</button>
+<div class="text-center mt-5 text-muted">Utworzone przez: Łukasz Wenda
+Przedstawiciel Handlowy
+Area Brzesko</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    function update() {
+      let rows = document.querySelectorAll('#productTable tbody tr');
+      let totalCost = 0;
+      let totalCostWithoutMargin = 0;
+      let baseCost = 0;
+      let totalQuantity = 0;
+
+      rows.forEach(row => {
+        let qty = parseFloat(row.children[1].children[0].value) || 0;
+        let net = parseFloat(row.children[2].children[0].value) || 0;
+        let vat = parseFloat(row.children[3].children[0].value) || 0;
+        let margin = parseFloat(row.children[4].children[0].value) || 0;
+
+        let cost = qty * net * (1 + vat / 100) * (1 + margin / 100);
+        let costWithoutMargin = qty * net * (1 + vat / 100);
+        row.children[5].innerText = cost.toFixed(2);
+
+        totalCost += cost;
+        totalCostWithoutMargin += costWithoutMargin;
+        baseCost += costWithoutMargin;
+        totalQuantity += qty;
+      });
+
+      let investmentAmount = parseFloat(document.getElementById("investmentAmount").value) || 0;
+
+      let percentKP = baseCost > 0 ? (investmentAmount / baseCost) * 100 : 0;
+      let priceDifference = totalQuantity > 0 ? investmentAmount / totalQuantity : 0;
+      let grossWithMargin = totalCost;
+      let grossWithoutMargin = totalCostWithoutMargin;
+      let clientProfit = grossWithMargin - grossWithoutMargin + investmentAmount;
+
+      document.getElementById("totalWithoutMargin").innerText = `Całkowity koszt zakupu (bez marży): ${totalCostWithoutMargin.toFixed(2)} PLN`;
+      document.getElementById("totalWithMargin").innerText = `Kwota po sprzedaży: ${totalCost.toFixed(2)} PLN`;
+      document.getElementById("kpPercent").innerText = `Procent Inwestycji KP: ${percentKP.toFixed(2)}%`;
+      document.getElementById("netPriceDifference").innerText = `Dopłata KP do jednej sztuki: ${priceDifference.toFixed(2)} PLN`;
+      document.getElementById("clientProfit").innerText = `Całkowity zysk klienta (wraz z inwestycją KP): ${clientProfit.toFixed(2)} PLN`;
     }
+
+    function addProduct() {
+      let tbody = document.querySelector('#productTable tbody');
+      let newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td><input type="text" class="form-control"></td>
+        <td><input type="number" class="form-control" value="0" onchange="update()"></td>
+        <td><input type="number" class="form-control" value="0" step="0.01" onchange="update()"></td>
+        <td><input type="number" class="form-control" value="23" onchange="update()"></td>
+        <td><input type="number" class="form-control" value="0" onchange="update()"></td>
+        <td class="total">0.00</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeRow(this)">Usuń</button></td>
+      `;
+      tbody.appendChild(newRow);
+      update();
+    }
+
+    function removeRow(button) {
+      button.closest('tr').remove();
+      update();
+    }
+
+    async function saveAsPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const clientName = document.getElementById("clientName").value || "Unnamed Client";
+      const today = new Date().toLocaleDateString();
+      const t1 = document.getElementById("totalWithoutMargin").innerText;
+      const t2 = document.getElementById("totalWithMargin").innerText;
+      const t3 = document.getElementById("kpPercent").innerText;
+      const t4 = document.getElementById("netPriceDifference").innerText;
+      const t5 = document.getElementById("clientProfit").innerText;
+
+      doc.setFontSize(16);
+      doc.text("Investment Calculator Report", 20, 20);
+      doc.setFontSize(12);
+      doc.text(`Client: ${clientName}`, 20, 30);
+      doc.text(`Date: ${today}`, 20, 37);
+      doc.text(t1, 20, 50);
+      doc.text(t2, 20, 60);
+      doc.text(t3, 20, 70);
+      doc.text(t4, 20, 80);
+      doc.text(t5, 20, 90);
+
+      
+      const safeClient = clientName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const filename = `kalkulator_${safeClient}_${today.replace(/\//g, "-")}.pdf`;
+      doc.save(filename);
+    
+    }
+
+    window.onload = update;
   </script>
 </body>
 </html>
